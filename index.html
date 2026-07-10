@@ -364,6 +364,22 @@
                         <input type="date" id="novo-pac-nasc">
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group" style="max-width:160px;">
+                        <label>CPF (opcional)</label>
+                        <input type="text" id="novo-pac-cpf" placeholder="000.000.000-00">
+                    </div>
+                    <div class="form-group">
+                        <label>2º Telefone (opcional)</label>
+                        <input type="tel" id="novo-pac-tel2" placeholder="(00) 00000-0000">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Responsável (para menores)</label>
+                        <input type="text" id="novo-pac-responsavel" placeholder="Nome do responsável legal">
+                    </div>
+                </div>
             </div>
             <div class="form-row">
                 <div class="form-group" style="flex:1">
@@ -375,8 +391,11 @@
                 <div class="form-group" style="max-width:220px;">
                     <label>Status inicial</label>
                     <select id="marcar-status-inicial">
+                        <option value="agendado">📅 Agendado</option>
                         <option value="confirmado">✅ Confirmado</option>
                         <option value="pendente">⏳ Pendente (aguardando confirmação)</option>
+                        <option value="atendido">🏁 Atendido</option>
+                        <option value="faltou">❌ Não compareceu</option>
                     </select>
                 </div>
             </div>
@@ -1316,6 +1335,23 @@
             </div>
         </div>
 
+        <!-- Médico solicitante — só aparece para exames -->
+        <div id="lanc-medico-bloco" style="display:none; margin-bottom:1rem;">
+            <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">Médico solicitante</label>
+            <select id="lanc-medico-sel" style="width:100%; margin-top:0.25rem;">
+                <option value="">— selecione (opcional) —</option>
+            </select>
+        </div>
+
+        <!-- Status de pagamento -->
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+            <label style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">Status:</label>
+            <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; font-weight:600;">
+                <input type="checkbox" id="lanc-pago" style="width:16px; height:16px; accent-color:#16a34a;">
+                <span id="lanc-pago-label" style="color:#64748b;">Marcar como pago</span>
+            </label>
+        </div>
+
         <div class="modal-actions">
             <button class="btn btn-outline" onclick="fecharModal('modal-lancamento')">Cancelar</button>
             <button class="btn btn-primary" id="lanc-salvar-btn" onclick="salvarLancamento()">Salvar Receita</button>
@@ -1429,6 +1465,13 @@
         <div class="form-row">
             <div class="form-group"><label>E-mail</label><input type="text" id="modal-pac-email-inp"></div>
             <div class="form-group"><label>Data de nascimento</label><input type="date" id="modal-pac-nasc-inp"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group" style="max-width:160px;"><label>CPF (opcional)</label><input type="text" id="modal-pac-cpf-inp" placeholder="000.000.000-00"></div>
+            <div class="form-group"><label>2º Telefone (opcional)</label><input type="tel" id="modal-pac-tel2-inp" placeholder="(00) 00000-0000"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Responsável (para menores)</label><input type="text" id="modal-pac-resp-inp" placeholder="Nome do responsável legal"></div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-outline" onclick="fecharModal('modal-novo-paciente')">Cancelar</button>
@@ -1771,6 +1814,9 @@ function renderLancamentos() {
     tbody.innerHTML = lista.map(l => {
         const pac = l.pacienteId ? (db.pacientes||[]).find(p=>p.id===l.pacienteId) : null;
         const parcStr = l.formaPagamento === 'credito' && l.parcelas > 1 ? `${l.parcelaAtual||1}/${l.parcelas}×` : '—';
+        const pagoBtn = l.pago
+            ? `<button class="btn btn-sm" style="background:#dcfce7;color:#15803d;font-size:0.72rem;" onclick="togglePago('${l.id}')">✅ Pago</button>`
+            : `<button class="btn btn-sm" style="background:#fef9c3;color:#92400e;font-size:0.72rem;" onclick="togglePago('${l.id}')">⏳ Pendente</button>`;
         return `<tr>
             <td>${fmtData(l.data)}</td>
             <td><span class="badge ${l.tipo==='receita'?'badge-receita':'badge-despesa'}">${l.tipo==='receita'?'↑ Receita':'↓ Despesa'}</span></td>
@@ -1779,6 +1825,7 @@ function renderLancamentos() {
             <td><span style="font-size:0.78rem;font-weight:700;color:${FORMA_COLOR[l.formaPagamento]||'#64748b'}">${FORMA_LABEL[l.formaPagamento]||l.formaPagamento||'—'}</span></td>
             <td class="td-center" style="font-size:0.78rem">${parcStr}</td>
             <td><small>${pac ? pac.nome : (l.refPaciente||'—')}</small></td>
+            <td class="td-center">${pagoBtn}</td>
             <td class="td-center ${l.tipo==='receita'?'fin-valor-pos':'fin-valor-neg'}">${fmtVal(l.valor)}</td>
             <td class="td-center">
                 <button class="btn btn-sm btn-outline" onclick="editarLancamento('${l.id}')">✏️</button>
@@ -1821,6 +1868,12 @@ function abrirModalLancamento(tipo) {
     document.querySelectorAll('input[name="lanc-forma"]').forEach(r => r.checked = false);
     document.querySelectorAll('.serv-chip').forEach(c => c.classList.remove('active'));
     document.getElementById('lanc-exame-bloco').style.display = 'none';
+    document.getElementById('lanc-medico-bloco').style.display = 'none';
+    document.getElementById('lanc-pago').checked = false;
+    // popula médicos
+    const medSel = document.getElementById('lanc-medico-sel');
+    medSel.innerHTML = '<option value="">— selecione (opcional) —</option>' +
+        (db.profissionais||[]).map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
     setTipoLanc(tipo);
     popularCatsFin();
     document.getElementById('modal-lancamento').classList.add('open');
@@ -1866,7 +1919,24 @@ function editarLancamento(id) {
     const radio = document.querySelector(`input[name="lanc-forma"][value="${l.formaPagamento}"]`);
     if (radio) radio.checked = true;
     onFormaPagamentoChange(l.formaPagamento, l.parcelas||1, l.parcelaAtual||1);
+    document.getElementById('lanc-pago').checked = !!l.pago;
+    // médico solicitante
+    const medSel = document.getElementById('lanc-medico-sel');
+    medSel.innerHTML = '<option value="">— selecione (opcional) —</option>' +
+        (db.profissionais||[]).map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+    medSel.value = l.medicoSolicitanteId || '';
+    const medicoBloco = document.getElementById('lanc-medico-bloco');
+    medicoBloco.style.display = l.medicoSolicitanteId ? '' : 'none';
+    document.getElementById('lanc-medico-bloco').style.display = 'none';
     document.getElementById('modal-lancamento').classList.add('open');
+}
+
+function togglePago(id) {
+    const l = (db.financeiro||[]).find(x => x.id === id);
+    if (!l) return;
+    l.pago = !l.pago;
+    save();
+    renderLancamentos();
 }
 
 function excluirLancamento(id) {
@@ -1889,6 +1959,8 @@ function salvarLancamento() {
     const parcelaAtual = parseInt(document.getElementById('lanc-parcela-atual').value || '1');
     const pacId    = document.getElementById('lanc-pac-id').value;
     const pacBusca = document.getElementById('lanc-pac-busca').value.trim();
+    const pago     = document.getElementById('lanc-pago').checked;
+    const medicoSolId = document.getElementById('lanc-medico-sel').value;
     if (!data || !desc || isNaN(valor) || valor <= 0 || !forma) {
         alert('Preencha: data, descrição, valor e forma de pagamento.'); return;
     }
@@ -1897,6 +1969,7 @@ function salvarLancamento() {
         parcelaAtual: forma==='credito' ? parcelaAtual : 1,
         pacienteId: pacId || null,
         refPaciente: !pacId && pacBusca ? pacBusca : '',
+        pago, medicoSolicitanteId: medicoSolId || null,
         obs, id: _lancEditId || uid() };
     if (_lancEditId) {
         const idx = (db.financeiro||[]).findIndex(l=>l.id===_lancEditId);
@@ -2099,6 +2172,10 @@ function selecionarServico(serv) {
 
     const catFin = SERV_FIN_CAT[serv] || serv;
     if (catSel.querySelector(`option[value="${catFin}"]`)) catSel.value = catFin;
+
+    // mostrar médico solicitante apenas para exames laboratoriais/imagem
+    const medicoBloco = document.getElementById('lanc-medico-bloco');
+    if (medicoBloco) medicoBloco.style.display = (serv === 'Laboratorial' || serv === 'Ultrassonografia' || serv === 'Eletrocardiograma' || serv === 'Raio-X') ? '' : 'none';
 }
 
 function selecionarExame(itemId) {
@@ -2813,10 +2890,10 @@ function renderSlotsDisponiveis() {
 
     let count = 0;
     slots.forEach(s => {
-        if (!ocupados.includes(s)) {
-            sel.innerHTML += `<option value="${s}">${s}</option>`;
-            count++;
-        }
+        const qtdOcupado = ocupados.filter(h => h === s).length;
+        const label = qtdOcupado > 0 ? `${s} (${qtdOcupado} agendado${qtdOcupado>1?'s':''})` : s;
+        sel.innerHTML += `<option value="${s}">${label}</option>`;
+        count++;
     });
     if (count === 0) sel.innerHTML = '<option value="">Sem horários disponíveis</option>';
 }
@@ -2897,6 +2974,9 @@ function limparFormMarcacao() {
     document.getElementById('novo-pac-tel').value = '';
     document.getElementById('novo-pac-email').value = '';
     document.getElementById('novo-pac-nasc').value = '';
+    document.getElementById('novo-pac-cpf').value = '';
+    document.getElementById('novo-pac-tel2').value = '';
+    document.getElementById('novo-pac-responsavel').value = '';
 }
 
 function confirmarMarcacao() {
@@ -2917,7 +2997,7 @@ function confirmarMarcacao() {
         const nome = document.getElementById('novo-pac-nome').value.trim();
         const tel = document.getElementById('novo-pac-tel').value.trim();
         if (!nome || !tel) { alert('Informe nome e WhatsApp do paciente.'); return; }
-        const novoPac = { id: uid(), nome, telefone: tel, email: document.getElementById('novo-pac-email').value, nascimento: document.getElementById('novo-pac-nasc').value };
+        const novoPac = { id: uid(), nome, telefone: tel, email: document.getElementById('novo-pac-email').value, nascimento: document.getElementById('novo-pac-nasc').value, cpf: document.getElementById('novo-pac-cpf').value.trim(), telefone2: document.getElementById('novo-pac-tel2').value.trim(), responsavel: document.getElementById('novo-pac-responsavel').value.trim() };
         db.pacientes.push(novoPac);
         pacId = novoPac.id;
     }
@@ -3193,10 +3273,7 @@ function renderPacientes() {
 
 function abrirModalNovoPaciente() {
     document.getElementById('modal-pac-edit-id').value = '';
-    document.getElementById('modal-pac-nome-inp').value = '';
-    document.getElementById('modal-pac-tel-inp').value = '';
-    document.getElementById('modal-pac-email-inp').value = '';
-    document.getElementById('modal-pac-nasc-inp').value = '';
+    ['modal-pac-nome-inp','modal-pac-tel-inp','modal-pac-email-inp','modal-pac-nasc-inp','modal-pac-cpf-inp','modal-pac-tel2-inp','modal-pac-resp-inp'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('modal-novo-paciente').classList.add('open');
 }
 
@@ -3208,6 +3285,9 @@ function editarPaciente(id) {
     document.getElementById('modal-pac-tel-inp').value = p.telefone || '';
     document.getElementById('modal-pac-email-inp').value = p.email || '';
     document.getElementById('modal-pac-nasc-inp').value = p.nascimento || '';
+    document.getElementById('modal-pac-cpf-inp').value = p.cpf || '';
+    document.getElementById('modal-pac-tel2-inp').value = p.telefone2 || '';
+    document.getElementById('modal-pac-resp-inp').value = p.responsavel || '';
     document.getElementById('modal-novo-paciente').classList.add('open');
 }
 
@@ -3216,13 +3296,18 @@ function salvarNovoPaciente() {
     const tel = document.getElementById('modal-pac-tel-inp').value.trim();
     if (!nome || !tel) { alert('Nome e WhatsApp são obrigatórios.'); return; }
     const editId = document.getElementById('modal-pac-edit-id').value;
+    const extras = {
+        email: document.getElementById('modal-pac-email-inp').value,
+        nascimento: document.getElementById('modal-pac-nasc-inp').value,
+        cpf: document.getElementById('modal-pac-cpf-inp').value.trim(),
+        telefone2: document.getElementById('modal-pac-tel2-inp').value.trim(),
+        responsavel: document.getElementById('modal-pac-resp-inp').value.trim(),
+    };
     if (editId) {
         const p = getPacById(editId);
-        p.nome = nome; p.telefone = tel;
-        p.email = document.getElementById('modal-pac-email-inp').value;
-        p.nascimento = document.getElementById('modal-pac-nasc-inp').value;
+        Object.assign(p, { nome, telefone: tel, ...extras });
     } else {
-        db.pacientes.push({ id: uid(), nome, telefone: tel, email: document.getElementById('modal-pac-email-inp').value, nascimento: document.getElementById('modal-pac-nasc-inp').value });
+        db.pacientes.push({ id: uid(), nome, telefone: tel, ...extras });
     }
     save();
     fecharModal('modal-novo-paciente');
@@ -3819,12 +3904,14 @@ function cliCarregarSlots() {
     const slots = gerarSlots(prof.horaInicio, prof.horaFim, prof.duracao);
     const ocupados = db.agendamentos.filter(a => a.data === data && a.profissionalId === cliProfSelecionado && a.status !== 'cancelado').map(a => a.hora);
 
-    const livres = slots.filter(s => !ocupados.includes(s));
-    if (!livres.length) { divSlots.innerHTML = '<div style="font-size:0.82rem;color:var(--text-muted);">Sem horários disponíveis neste dia.</div>'; return; }
+    if (!slots.length) { divSlots.innerHTML = '<div style="font-size:0.82rem;color:var(--text-muted);">Sem horários disponíveis neste dia.</div>'; return; }
 
-    divSlots.innerHTML = livres.map(s =>
-        `<button onclick="cliSelecionarSlot('${s}', this)" style="padding:0.35rem 0.75rem;border:2px solid var(--border-color);border-radius:6px;background:#fff;cursor:pointer;font-size:0.82rem;font-weight:600;transition:all 0.15s;">${s}</button>`
-    ).join('');
+    divSlots.innerHTML = slots.map(s => {
+        const qtd = ocupados.filter(h => h === s).length;
+        const label = qtd > 0 ? `${s} (${qtd})` : s;
+        const cor = qtd > 0 ? '#fef9c3' : '#fff';
+        return `<button onclick="cliSelecionarSlot('${s}', this)" style="padding:0.35rem 0.75rem;border:2px solid var(--border-color);border-radius:6px;background:${cor};cursor:pointer;font-size:0.82rem;font-weight:600;transition:all 0.15s;">${label}</button>`;
+    }).join('');
 }
 
 function cliSelecionarSlot(hora, el) {
@@ -3917,7 +4004,11 @@ function carregarSlotsRemarcacao() {
     if (!prof || !data) return;
     const slots = gerarSlots(prof.horaInicio, prof.horaFim, prof.duracao);
     const ocupados = db.agendamentos.filter(a => a.data === data && a.profissionalId === ag.profissionalId && a.status !== 'cancelado' && a.id !== ag.id).map(a => a.hora);
-    slots.filter(s => !ocupados.includes(s)).forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
+    slots.forEach(s => {
+        const qtd = ocupados.filter(h => h === s).length;
+        const label = qtd > 0 ? `${s} (${qtd} agendado${qtd>1?'s':''})` : s;
+        sel.innerHTML += `<option value="${s}">${label}</option>`;
+    });
 }
 
 function criarRemarcacao() {
