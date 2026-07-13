@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dra.Saúde — Agenda de Consultas</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -175,6 +176,14 @@
 
         .empty-state { text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.88rem; }
         .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        /* Supabase login */
+        #sb-login-overlay { position:fixed; inset:0; background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 60%,#7c3aed 100%); display:flex; align-items:center; justify-content:center; z-index:10000; }
+        #sb-login-overlay.hidden { display:none; }
+        .sb-login-box { background:#fff; border-radius:20px; padding:2.5rem 2rem; width:340px; max-width:94vw; box-shadow:0 24px 60px rgba(0,0,0,0.35); text-align:center; }
+        .sb-login-sub { font-size:0.82rem; color:#6b7280; margin-bottom:1.5rem; }
+        .sb-login-err { color:#dc2626; font-size:0.82rem; min-height:1.2em; margin-bottom:0.5rem; }
+        .sb-login-btn { width:100%; background:#5b21b6; color:#fff; border:none; border-radius:10px; padding:0.75rem; font-size:1rem; font-weight:700; cursor:pointer; margin-top:0.25rem; }
+        .sb-login-btn:hover { background:#4c1d95; }
         /* Login overlay */
         #login-overlay { position:fixed; inset:0; background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 60%,#7c3aed 100%); display:flex; align-items:center; justify-content:center; z-index:9999; }
         #login-overlay.hidden { display:none; }
@@ -196,8 +205,31 @@
 </head>
 <body>
 
-<!-- ═══════ TELA DE LOGIN ════════════════════════════════════════════════ -->
-<div id="login-overlay">
+<!-- ═══════ SUPABASE LOGIN ═══════════════════════════════════════════════ -->
+<div id="sb-login-overlay">
+  <div class="sb-login-box">
+    <img class="login-logo" id="sb-login-logo" alt="Dra.Saúde">
+    <div class="login-title">Dra.Saúde Clínica Médica</div>
+    <div class="sb-login-sub">Agenda de Consultas</div>
+    <div class="form-group" style="text-align:left;margin-bottom:0.75rem;">
+      <label style="font-size:0.82rem;font-weight:600;color:#374151;">E-mail</label>
+      <input type="email" id="sb-email" placeholder="clinica@email.com" autocomplete="email"
+        style="width:100%;padding:0.6rem 0.75rem;border:1.5px solid #d1d5db;border-radius:8px;font-size:0.95rem;margin-top:0.25rem;"
+        onkeydown="if(event.key==='Enter')document.getElementById('sb-pw').focus()">
+    </div>
+    <div class="form-group" style="text-align:left;margin-bottom:0.75rem;">
+      <label style="font-size:0.82rem;font-weight:600;color:#374151;">Senha</label>
+      <input type="password" id="sb-pw" placeholder="••••••••" autocomplete="current-password"
+        style="width:100%;padding:0.6rem 0.75rem;border:1.5px solid #d1d5db;border-radius:8px;font-size:0.95rem;margin-top:0.25rem;"
+        onkeydown="if(event.key==='Enter')doSbLogin()">
+    </div>
+    <div id="sb-err" class="sb-login-err"></div>
+    <button class="sb-login-btn" onclick="doSbLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- ═══════ TELA DE LOGIN (perfil) ════════════════════════════════════════ -->
+<div id="login-overlay" class="hidden">
     <div class="login-box">
         <img id="login-logo" class="login-logo" alt="Dra.Saúde">
         <div class="login-title">Dra.Saúde Clínica Médica</div>
@@ -1481,31 +1513,74 @@
 </div>
 
 <script>
-// ══════════════════════════ BANCO DE DADOS (localStorage) ══════════════════════════
+// ══════════════════════════ SUPABASE ══════════════════════════
+const _sb = supabase.createClient(
+    'https://pxcqyzbgfbwwkazmonzx.supabase.co',
+    'sb_publishable_6QT2f_wCkTmpfoO_EEZlpA_BCcC8Fv8'
+);
+let _sbUser = null;
+
+async function loadFromSupabase() {
+    const { data } = await _sb.from('agenda_data')
+        .select('dados').eq('user_id', _sbUser.id).maybeSingle();
+    if (data?.dados) {
+        db = data.dados;
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+    }
+}
+
+function save() {
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    if (!_sbUser) return;
+    _sb.from('agenda_data')
+        .upsert({ user_id: _sbUser.id, dados: db, updated_at: new Date().toISOString() })
+        .then(({ error }) => { if (error) console.warn('Supabase save error:', error); });
+}
+
+async function doSbLogin() {
+    const email = document.getElementById('sb-email').value.trim();
+    const pw    = document.getElementById('sb-pw').value;
+    const err   = document.getElementById('sb-err');
+    const btn   = document.querySelector('.sb-login-btn');
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const { data, error } = await _sb.auth.signInWithPassword({ email, password: pw });
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (error) { err.textContent = 'E-mail ou senha incorretos.'; return; }
+    _sbUser = data.user;
+    await loadFromSupabase();
+    document.getElementById('sb-login-overlay').classList.add('hidden');
+    initApp();
+}
+
+async function doSbLogout() {
+    await _sb.auth.signOut();
+    location.reload();
+}
+
+// ══════════════════════════ BANCO DE DADOS ══════════════════════════
 const DB_KEY = 'agenda_consultas_v1';
 let db = JSON.parse(localStorage.getItem(DB_KEY)) || {};
 
-if (!db.especialidades) db.especialidades = ['Clínica Geral','Pediatria','Cardiologia','Psicologia','Dermatologia'];
-if (!db.profissionais) db.profissionais = [];
-if (!db.pacientes) db.pacientes = [];
-if (!db.agendamentos) db.agendamentos = [];
-if (!db.exames) db.exames = [];
-if (!db.tabelaPrecos) db.tabelaPrecos = [];
-if (!db.senhas) db.senhas = { recepcao: '1234', admin: '0000' };
-if (!db.financeiro) db.financeiro = [];
-if (!db.receitas) db.receitas = [];
-if (!db.categoriasFinanceiro) db.categoriasFinanceiro = {
-    receitas: ['Consulta','Exame Laboratorial','Exame de Imagem','Exame Cardiológico','Procedimento','Orçamento','Outros'],
-    despesas: ['Aluguel','Salário','Materiais','Equipamentos','Serviços','Luz/Água/Internet','Marketing','Impostos','Outros']
-};
-// garante novas categorias de receita para bases já existentes
-['Exame Laboratorial','Exame de Imagem','Exame Cardiológico'].forEach(cat => {
-    if (!db.categoriasFinanceiro.receitas.includes(cat))
-        db.categoriasFinanceiro.receitas.splice(1, 0, cat);
-});
-save();
-
-function save() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function applyDefaults() {
+    if (!db.especialidades) db.especialidades = ['Clínica Geral','Pediatria','Cardiologia','Psicologia','Dermatologia'];
+    if (!db.profissionais) db.profissionais = [];
+    if (!db.pacientes) db.pacientes = [];
+    if (!db.agendamentos) db.agendamentos = [];
+    if (!db.exames) db.exames = [];
+    if (!db.tabelaPrecos) db.tabelaPrecos = [];
+    if (!db.senhas) db.senhas = { recepcao: '1234', admin: '0000' };
+    if (!db.financeiro) db.financeiro = [];
+    if (!db.receitas) db.receitas = [];
+    if (!db.categoriasFinanceiro) db.categoriasFinanceiro = {
+        receitas: ['Consulta','Exame Laboratorial','Exame de Imagem','Exame Cardiológico','Procedimento','Orçamento','Outros'],
+        despesas: ['Aluguel','Salário','Materiais','Equipamentos','Serviços','Luz/Água/Internet','Marketing','Impostos','Outros']
+    };
+    ['Exame Laboratorial','Exame de Imagem','Exame Cardiológico'].forEach(cat => {
+        if (!db.categoriasFinanceiro.receitas.includes(cat))
+            db.categoriasFinanceiro.receitas.splice(1, 0, cat);
+    });
+}
 
 // ══════════════════════════ CATEGORIAS DE EXAMES ══════════════════════════
 const CATS_EXAME = {
@@ -4612,28 +4687,26 @@ function profAtendeSemana(prof, dataISO) {
     return true;
 }
 
-window.onload = function() {
+function initApp() {
+    applyDefaults();
     document.getElementById('agenda-data-inicio').value = semanaAtual;
     document.getElementById('header-data-hoje').textContent = `Hoje: ${fmtData(hoje())}`;
-    // Inicia sem perfil — mostra tela de login
-    trocarPerfil('recepcao'); // define estado inicial invisível
+    trocarPerfil('recepcao');
     popularFiltroProf();
     renderAgenda();
-    // Mostra login após tudo carregado
     setTimeout(abrirLogin, 100);
-    // Popula selects de orçamento e preços
     popularSelectCats('preco-filtro-cat');
     popularSelectCats('orc-cat-filtro');
     initCategoriasExame();
     renderPrecos();
     renderExamesOrcamento();
-    // Preview orçamento em tempo real
     document.getElementById('orc-pac-nome').addEventListener('input', atualizarPreviewOrc);
     document.getElementById('orc-data').addEventListener('change', atualizarPreviewOrc);
-    // Data padrão orçamento = hoje
     document.getElementById('orc-data').value = hoje();
+    // copia logo para tela de login interna
+    const logoSrc = document.querySelector('header img')?.src || '';
+    if (logoSrc) document.getElementById('sb-login-logo').src = logoSrc;
 
-    // Dados demo se vazio
     if (!db.profissionais.length) {
         db.profissionais = [
             { id: 'p1', nome: 'Dr. Carlos Mendes', especialidades: ['Clínica Geral','Cardiologia'], especialidade: 'Clínica Geral', duracao: 30, horaInicio: '08:00', horaFim: '17:00', diasAtendimento: [1,2,3,4,5] },
@@ -4653,6 +4726,20 @@ window.onload = function() {
         popularFiltroProf();
         renderAgenda();
     }
+}
+
+window.onload = async function() {
+    const { data: { session } } = await _sb.auth.getSession();
+    _sbUser = session?.user ?? null;
+    if (!_sbUser) {
+        // copia logo para o sb-login-overlay
+        const logoSrc = document.querySelector('header img')?.src || '';
+        if (logoSrc) document.getElementById('sb-login-logo').src = logoSrc;
+        return;
+    }
+    await loadFromSupabase();
+    document.getElementById('sb-login-overlay').classList.add('hidden');
+    initApp();
 };
 </script>
 </body>
