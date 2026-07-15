@@ -1488,24 +1488,56 @@
 
 <!-- ═══════ MODAL NOVO PACIENTE -->
 <div class="modal-overlay" id="modal-novo-paciente">
-    <div class="modal">
+    <div class="modal" style="max-width:680px; max-height:92vh; overflow-y:auto;">
         <div class="modal-title">Novo Paciente</div>
         <input type="hidden" id="modal-pac-edit-id">
+
+        <div style="font-size:0.72rem; font-weight:800; color:var(--royal-dark); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.5rem;">Dados pessoais</div>
         <div class="form-row">
             <div class="form-group"><label>Nome completo *</label><input type="text" id="modal-pac-nome-inp"></div>
-            <div class="form-group"><label>WhatsApp *</label><input type="tel" id="modal-pac-tel-inp" placeholder="(00) 00000-0000"></div>
+            <div class="form-group" style="max-width:120px;"><label>Gênero</label>
+                <select id="modal-pac-genero-inp">
+                    <option value="">—</option>
+                    <option value="F">Feminino</option>
+                    <option value="M">Masculino</option>
+                    <option value="Outro">Outro</option>
+                </select>
+            </div>
         </div>
         <div class="form-row">
-            <div class="form-group"><label>E-mail</label><input type="text" id="modal-pac-email-inp"></div>
             <div class="form-group"><label>Data de nascimento</label><input type="date" id="modal-pac-nasc-inp"></div>
-        </div>
-        <div class="form-row">
-            <div class="form-group" style="max-width:160px;"><label>CPF (opcional)</label><input type="text" id="modal-pac-cpf-inp" placeholder="000.000.000-00"></div>
-            <div class="form-group"><label>2º Telefone (opcional)</label><input type="tel" id="modal-pac-tel2-inp" placeholder="(00) 00000-0000"></div>
+            <div class="form-group" style="max-width:160px;"><label>CPF</label><input type="text" id="modal-pac-cpf-inp" placeholder="000.000.000-00"></div>
+            <div class="form-group" style="max-width:140px;"><label>RG</label><input type="text" id="modal-pac-rg-inp" placeholder="00.000.000-0"></div>
         </div>
         <div class="form-row">
             <div class="form-group"><label>Responsável (para menores)</label><input type="text" id="modal-pac-resp-inp" placeholder="Nome do responsável legal"></div>
         </div>
+
+        <div style="font-size:0.72rem; font-weight:800; color:var(--royal-dark); text-transform:uppercase; letter-spacing:0.05em; margin:0.75rem 0 0.5rem;">Contato</div>
+        <div class="form-row">
+            <div class="form-group"><label>Celular / WhatsApp *</label><input type="tel" id="modal-pac-tel-inp" placeholder="(00) 00000-0000"></div>
+            <div class="form-group"><label>Telefone fixo</label><input type="tel" id="modal-pac-tel2-inp" placeholder="(00) 0000-0000"></div>
+            <div class="form-group"><label>E-mail</label><input type="text" id="modal-pac-email-inp"></div>
+        </div>
+
+        <div style="font-size:0.72rem; font-weight:800; color:var(--royal-dark); text-transform:uppercase; letter-spacing:0.05em; margin:0.75rem 0 0.5rem;">Endereço</div>
+        <div class="form-row">
+            <div class="form-group" style="max-width:120px;"><label>CEP</label><input type="text" id="modal-pac-cep-inp" placeholder="00000-000"></div>
+            <div class="form-group" style="flex:2;"><label>Endereço</label><input type="text" id="modal-pac-end-inp" placeholder="Rua, Av..."></div>
+            <div class="form-group" style="max-width:80px;"><label>Número</label><input type="text" id="modal-pac-num-inp"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Complemento</label><input type="text" id="modal-pac-comp-inp" placeholder="Apto, Bloco..."></div>
+            <div class="form-group"><label>Bairro</label><input type="text" id="modal-pac-bairro-inp"></div>
+            <div class="form-group"><label>Cidade</label><input type="text" id="modal-pac-cidade-inp"></div>
+        </div>
+
+        <div style="font-size:0.72rem; font-weight:800; color:var(--royal-dark); text-transform:uppercase; letter-spacing:0.05em; margin:0.75rem 0 0.5rem;">Outras informações</div>
+        <div class="form-row">
+            <div class="form-group"><label>Indicação</label><input type="text" id="modal-pac-indicacao-inp" placeholder="Ex: Google, Indicação Dr. João..."></div>
+            <div class="form-group" style="max-width:160px;"><label>Data de entrada</label><input type="date" id="modal-pac-entrada-inp"></div>
+        </div>
+
         <div class="modal-actions">
             <button class="btn btn-outline" onclick="fecharModal('modal-novo-paciente')">Cancelar</button>
             <button class="btn btn-primary" onclick="salvarNovoPaciente()">Salvar</button>
@@ -3125,33 +3157,57 @@ function importarExcelPacientes(input) {
             if (temCabecalho) startRow = 1;
 
             // Mapeamento automático de colunas
-            let colNome = 0, colTel = 1, colEmail = 2, colNasc = 3;
+            const cols = {};
             if (temCabecalho) {
                 primeira.forEach((c, i) => {
-                    if (c.includes('nome') || c.includes('paciente') || c.includes('client')) colNome = i;
-                    else if (c.includes('tel') || c.includes('whats') || c.includes('fone') || c.includes('celul') || c.includes('contato')) colTel = i;
-                    else if (c.includes('email') || c.includes('e-mail') || c.includes('mail')) colEmail = i;
-                    else if (c.includes('nasc') || c.includes('data') || c.includes('nascimento') || c.includes('idade')) colNasc = i;
+                    const s = c.toLowerCase().trim().replace(/\s+/g,'');
+                    if (s.includes('nome') || s.includes('paciente') || s.includes('client')) cols.nome = i;
+                    else if (s === 'celular' || s.includes('celul') || s.includes('whats')) cols.cel = i;
+                    else if (s === 'fixo' || s.includes('telefone') && !s.includes('celul')) cols.fixo = i;
+                    else if (s.includes('email') || s.includes('mail')) cols.email = i;
+                    else if (s.includes('nasc')) cols.nasc = i;
+                    else if (s === 'genero' || s === 'gênero' || s === 'sexo') cols.genero = i;
+                    else if (s === 'cpf') cols.cpf = i;
+                    else if (s === 'rg') cols.rg = i;
+                    else if (s === 'cep') cols.cep = i;
+                    else if (s === 'endereco' || s === 'endereço') cols.endereco = i;
+                    else if (s === 'numero' || s === 'número') cols.numero = i;
+                    else if (s === 'complemento') cols.complemento = i;
+                    else if (s === 'bairro') cols.bairro = i;
+                    else if (s === 'cidade') cols.cidade = i;
+                    else if (s === 'indicacao' || s === 'indicação') cols.indicacao = i;
+                    else if (s.includes('entrada')) cols.entrada = i;
+                    else if (s.includes('atuali')) cols.atualizacao = i;
                 });
             }
+            if (cols.nome === undefined) cols.nome = 0;
+            if (cols.cel === undefined) cols.cel = cols.fixo !== undefined ? cols.fixo : 1;
+
+            const normData = (v) => {
+                let s = String(v || '').trim();
+                if (!s || s === '0') return '';
+                // Excel serial date
+                if (/^\d{5}$/.test(s)) {
+                    const d = new Date(Math.round((parseFloat(s) - 25569) * 86400 * 1000));
+                    return d.toISOString().slice(0,10);
+                }
+                if (s.includes('-') && s.length >= 8) return s.slice(0,10);
+                const partes = s.split(/[\/\.]/).filter(Boolean);
+                if (partes.length === 3) {
+                    const [a, b, c] = partes;
+                    return a.length === 4 ? `${a}-${b.padStart(2,'0')}-${c.padStart(2,'0')}` : `${c}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
+                }
+                return '';
+            };
+            const col = (row, key) => String(row[cols[key]] ?? '').trim();
 
             let adicionados = 0, duplicados = 0, erros = 0;
             for (let i = startRow; i < rows.length; i++) {
                 const row = rows[i];
-                const nome = String(row[colNome] || '').trim();
+                const nome = col(row, 'nome');
                 if (!nome) { erros++; continue; }
-                const tel = String(row[colTel] || '').replace(/\D/g, '');
-                const email = String(row[colEmail] || '').trim();
-                let nasc = String(row[colNasc] || '').trim();
-
-                // Normaliza data de nascimento
-                if (nasc && !nasc.includes('-')) {
-                    const partes = nasc.split(/[\/\.]/).filter(Boolean);
-                    if (partes.length === 3) {
-                        const [a, b, c] = partes;
-                        nasc = a.length === 4 ? `${a}-${b.padStart(2,'0')}-${c.padStart(2,'0')}` : `${c}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
-                    }
-                }
+                const tel = col(row, 'cel').replace(/\D/g,'');
+                const fixo = col(row, 'fixo').replace(/\D/g,'');
 
                 // Verifica duplicata por nome+tel
                 const jaExiste = db.pacientes.some(p =>
@@ -3159,7 +3215,25 @@ function importarExcelPacientes(input) {
                 );
                 if (jaExiste) { duplicados++; continue; }
 
-                db.pacientes.push({ id: uid(), nome, telefone: tel, email, nascimento: nasc });
+                db.pacientes.push({
+                    id: uid(),
+                    nome,
+                    telefone: tel,
+                    telefone2: fixo || col(row,'fixo'),
+                    email: col(row,'email'),
+                    nascimento: normData(row[cols.nasc]),
+                    genero: col(row,'genero'),
+                    cpf: col(row,'cpf'),
+                    rg: col(row,'rg'),
+                    cep: col(row,'cep'),
+                    endereco: col(row,'endereco'),
+                    numero: col(row,'numero'),
+                    complemento: col(row,'complemento'),
+                    bairro: col(row,'bairro'),
+                    cidade: col(row,'cidade'),
+                    indicacao: col(row,'indicacao'),
+                    dataEntrada: normData(row[cols.entrada]),
+                });
                 adicionados++;
             }
             save();
@@ -3347,9 +3421,16 @@ function renderPacientes() {
     }).join('');
 }
 
+const _PAC_FIELDS = ['modal-pac-nome-inp','modal-pac-tel-inp','modal-pac-email-inp','modal-pac-nasc-inp',
+    'modal-pac-cpf-inp','modal-pac-rg-inp','modal-pac-tel2-inp','modal-pac-resp-inp',
+    'modal-pac-cep-inp','modal-pac-end-inp','modal-pac-num-inp','modal-pac-comp-inp',
+    'modal-pac-bairro-inp','modal-pac-cidade-inp','modal-pac-indicacao-inp','modal-pac-entrada-inp'];
+
 function abrirModalNovoPaciente() {
     document.getElementById('modal-pac-edit-id').value = '';
-    ['modal-pac-nome-inp','modal-pac-tel-inp','modal-pac-email-inp','modal-pac-nasc-inp','modal-pac-cpf-inp','modal-pac-tel2-inp','modal-pac-resp-inp'].forEach(id => { document.getElementById(id).value = ''; });
+    _PAC_FIELDS.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    const g = document.getElementById('modal-pac-genero-inp'); if(g) g.value = '';
+    document.getElementById('modal-pac-entrada-inp').value = new Date().toISOString().slice(0,10);
     document.getElementById('modal-novo-paciente').classList.add('open');
 }
 
@@ -3357,28 +3438,55 @@ function editarPaciente(id) {
     const p = getPacById(id);
     if (!p) return;
     document.getElementById('modal-pac-edit-id').value = id;
-    document.getElementById('modal-pac-nome-inp').value = p.nome;
-    document.getElementById('modal-pac-tel-inp').value = p.telefone || '';
-    document.getElementById('modal-pac-email-inp').value = p.email || '';
-    document.getElementById('modal-pac-nasc-inp').value = p.nascimento || '';
-    document.getElementById('modal-pac-cpf-inp').value = p.cpf || '';
-    document.getElementById('modal-pac-tel2-inp').value = p.telefone2 || '';
-    document.getElementById('modal-pac-resp-inp').value = p.responsavel || '';
+    const set = (elId, val) => { const el = document.getElementById(elId); if(el) el.value = val || ''; };
+    set('modal-pac-nome-inp', p.nome);
+    set('modal-pac-tel-inp', p.telefone);
+    set('modal-pac-email-inp', p.email);
+    set('modal-pac-nasc-inp', p.nascimento);
+    set('modal-pac-cpf-inp', p.cpf);
+    set('modal-pac-rg-inp', p.rg);
+    set('modal-pac-tel2-inp', p.telefone2);
+    set('modal-pac-resp-inp', p.responsavel);
+    set('modal-pac-cep-inp', p.cep);
+    set('modal-pac-end-inp', p.endereco);
+    set('modal-pac-num-inp', p.numero);
+    set('modal-pac-comp-inp', p.complemento);
+    set('modal-pac-bairro-inp', p.bairro);
+    set('modal-pac-cidade-inp', p.cidade);
+    set('modal-pac-indicacao-inp', p.indicacao);
+    set('modal-pac-entrada-inp', p.dataEntrada);
+    const g = document.getElementById('modal-pac-genero-inp'); if(g) g.value = p.genero || '';
     document.getElementById('modal-novo-paciente').classList.add('open');
+}
+
+function _coletarCamposPac() {
+    const get = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    return {
+        email: get('modal-pac-email-inp'),
+        nascimento: get('modal-pac-nasc-inp'),
+        genero: get('modal-pac-genero-inp') || (document.getElementById('modal-pac-genero-inp')?.value || ''),
+        cpf: get('modal-pac-cpf-inp'),
+        rg: get('modal-pac-rg-inp'),
+        telefone2: get('modal-pac-tel2-inp'),
+        responsavel: get('modal-pac-resp-inp'),
+        cep: get('modal-pac-cep-inp'),
+        endereco: get('modal-pac-end-inp'),
+        numero: get('modal-pac-num-inp'),
+        complemento: get('modal-pac-comp-inp'),
+        bairro: get('modal-pac-bairro-inp'),
+        cidade: get('modal-pac-cidade-inp'),
+        indicacao: get('modal-pac-indicacao-inp'),
+        dataEntrada: get('modal-pac-entrada-inp'),
+    };
 }
 
 function salvarNovoPaciente() {
     const nome = document.getElementById('modal-pac-nome-inp').value.trim();
     const tel = document.getElementById('modal-pac-tel-inp').value.trim();
-    if (!nome || !tel) { alert('Nome e WhatsApp são obrigatórios.'); return; }
+    if (!nome || !tel) { alert('Nome e celular são obrigatórios.'); return; }
     const editId = document.getElementById('modal-pac-edit-id').value;
-    const extras = {
-        email: document.getElementById('modal-pac-email-inp').value,
-        nascimento: document.getElementById('modal-pac-nasc-inp').value,
-        cpf: document.getElementById('modal-pac-cpf-inp').value.trim(),
-        telefone2: document.getElementById('modal-pac-tel2-inp').value.trim(),
-        responsavel: document.getElementById('modal-pac-resp-inp').value.trim(),
-    };
+    const extras = _coletarCamposPac();
+    extras.genero = document.getElementById('modal-pac-genero-inp')?.value || '';
     if (editId) {
         const p = getPacById(editId);
         Object.assign(p, { nome, telefone: tel, ...extras });
