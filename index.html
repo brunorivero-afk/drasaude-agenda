@@ -673,6 +673,16 @@
                     </label>
                 </div>
 
+                <!-- Sincronizar nuvem -->
+                <div style="border:2px solid #2563eb; border-radius:10px; padding:1.25rem; background:#eff6ff;">
+                    <div style="font-weight:700; font-size:0.88rem; color:#1d4ed8; margin-bottom:0.4rem;">☁️ Sincronizar com a nuvem</div>
+                    <div style="font-size:0.8rem; color:#3b82f6; margin-bottom:0.85rem;">
+                        Força o envio de todos os dados deste navegador para o Supabase.<br>
+                        Use isto após importar uma planilha ou se os dados não aparecerem em outro dispositivo.
+                    </div>
+                    <button id="btn-sync-nuvem" class="btn btn-primary" onclick="sincronizarNuvem()">☁️ Sincronizar com a nuvem agora</button>
+                </div>
+
                 <!-- Estatísticas do banco -->
                 <div style="border:1px solid var(--border-color); border-radius:10px; padding:1.25rem; background:#f8fafc;">
                     <div style="font-weight:700; font-size:0.88rem; color:var(--royal-dark); margin-bottom:0.75rem;">📊 Dados armazenados atualmente</div>
@@ -1786,6 +1796,21 @@ function switchCfgTab(e, sectionId) {
         document.getElementById('senha-ok-msg').style.display = 'none';
     }
     if (sectionId === 'cfg-backup') renderBackupStats();
+}
+
+async function sincronizarNuvem() {
+    const btn = document.getElementById('btn-sync-nuvem');
+    if (!_sbUser) { alert('Você precisa estar logado para sincronizar com a nuvem.'); return; }
+    btn.disabled = true; btn.textContent = '⏳ Sincronizando...';
+    const { error } = await _sb.from('agenda_data')
+        .upsert({ user_id: _sbUser.id, dados: db, updated_at: new Date().toISOString() });
+    btn.disabled = false; btn.textContent = '☁️ Sincronizar com a nuvem agora';
+    if (error) {
+        alert('❌ Erro ao sincronizar: ' + error.message);
+    } else {
+        btn.textContent = '✅ Sincronizado!';
+        setTimeout(() => { btn.textContent = '☁️ Sincronizar com a nuvem agora'; }, 3000);
+    }
 }
 
 function renderBackupStats() {
