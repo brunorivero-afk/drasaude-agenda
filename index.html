@@ -1563,9 +1563,11 @@ const _sb = supabase.createClient(
 );
 let _sbUser = null;
 
+const _SB_CLINIC_ID = 'clinica_drasaude';
+
 async function loadFromSupabase() {
     const { data } = await _sb.from('agenda_data')
-        .select('dados').eq('user_id', _sbUser.id).maybeSingle();
+        .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
     if (data?.dados) {
         db = data.dados;
         localStorage.setItem(DB_KEY, JSON.stringify(db));
@@ -1576,7 +1578,7 @@ function save() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
     if (!_sbUser) return;
     _sb.from('agenda_data')
-        .upsert({ user_id: _sbUser.id, dados: db, updated_at: new Date().toISOString() })
+        .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' })
         .then(({ error }) => { if (error) console.warn('Supabase save error:', error); });
 }
 
@@ -1803,7 +1805,7 @@ async function sincronizarNuvem() {
     if (!_sbUser) { alert('Você precisa estar logado para sincronizar com a nuvem.'); return; }
     btn.disabled = true; btn.textContent = '⏳ Sincronizando...';
     const { error } = await _sb.from('agenda_data')
-        .upsert({ user_id: _sbUser.id, dados: db, updated_at: new Date().toISOString() });
+        .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
     btn.disabled = false; btn.textContent = '☁️ Sincronizar com a nuvem agora';
     if (error) {
         alert('❌ Erro ao sincronizar: ' + error.message);
