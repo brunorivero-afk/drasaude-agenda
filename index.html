@@ -1540,7 +1540,7 @@ const _SB_CLINIC_ID = 'clinica_drasaude';
 async function loadFromSupabase() {
     try {
         const { data } = await _sb.from('agenda_data')
-            .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
+            .select('dados').eq('user_id', 'clinica_drasaude').maybeSingle();
         if (data?.dados) {
             db = data.dados;
             localStorage.setItem(DB_KEY, JSON.stringify(db));
@@ -1551,7 +1551,7 @@ async function loadFromSupabase() {
 function save() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
     _sb.from('agenda_data')
-        .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' })
+        .upsert({ user_id: 'clinica_drasaude', clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
         .then(({ error }) => { if (error) console.warn('Supabase save error:', error); });
 }
 
