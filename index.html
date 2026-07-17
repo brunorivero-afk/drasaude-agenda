@@ -1758,7 +1758,6 @@ function switchCfgTab(e, sectionId) {
 
 async function sincronizarNuvem() {
     const btn = document.getElementById('btn-sync-nuvem');
-    if (!_sbUser) { alert('Você precisa estar logado para sincronizar com a nuvem.'); return; }
     btn.disabled = true; btn.textContent = '⏳ Sincronizando...';
     const { error } = await _sb.from('agenda_data')
         .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
