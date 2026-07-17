@@ -177,13 +177,6 @@
         .empty-state { text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.88rem; }
         .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
         /* Supabase login */
-        #sb-login-overlay { position:fixed; inset:0; background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 60%,#7c3aed 100%); display:flex; align-items:center; justify-content:center; z-index:10000; }
-        #sb-login-overlay.hidden { display:none; }
-        .sb-login-box { background:#fff; border-radius:20px; padding:2.5rem 2rem; width:340px; max-width:94vw; box-shadow:0 24px 60px rgba(0,0,0,0.35); text-align:center; }
-        .sb-login-sub { font-size:0.82rem; color:#6b7280; margin-bottom:1.5rem; }
-        .sb-login-err { color:#dc2626; font-size:0.82rem; min-height:1.2em; margin-bottom:0.5rem; }
-        .sb-login-btn { width:100%; background:#5b21b6; color:#fff; border:none; border-radius:10px; padding:0.75rem; font-size:1rem; font-weight:700; cursor:pointer; margin-top:0.25rem; }
-        .sb-login-btn:hover { background:#4c1d95; }
         /* Login overlay */
         #login-overlay { position:fixed; inset:0; background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 60%,#7c3aed 100%); display:flex; align-items:center; justify-content:center; z-index:9999; }
         #login-overlay.hidden { display:none; }
@@ -206,27 +199,6 @@
 <body>
 
 <!-- ═══════ SUPABASE LOGIN ═══════════════════════════════════════════════ -->
-<div id="sb-login-overlay">
-  <div class="sb-login-box">
-    <img class="login-logo" id="sb-login-logo" alt="Dra.Saúde">
-    <div class="login-title">Dra.Saúde Clínica Médica</div>
-    <div class="sb-login-sub">Agenda de Consultas</div>
-    <div class="form-group" style="text-align:left;margin-bottom:0.75rem;">
-      <label style="font-size:0.82rem;font-weight:600;color:#374151;">E-mail</label>
-      <input type="email" id="sb-email" placeholder="clinica@email.com" autocomplete="email"
-        style="width:100%;padding:0.6rem 0.75rem;border:1.5px solid #d1d5db;border-radius:8px;font-size:0.95rem;margin-top:0.25rem;"
-        onkeydown="if(event.key==='Enter')document.getElementById('sb-pw').focus()">
-    </div>
-    <div class="form-group" style="text-align:left;margin-bottom:0.75rem;">
-      <label style="font-size:0.82rem;font-weight:600;color:#374151;">Senha</label>
-      <input type="password" id="sb-pw" placeholder="••••••••" autocomplete="current-password"
-        style="width:100%;padding:0.6rem 0.75rem;border:1.5px solid #d1d5db;border-radius:8px;font-size:0.95rem;margin-top:0.25rem;"
-        onkeydown="if(event.key==='Enter')doSbLogin()">
-    </div>
-    <div id="sb-err" class="sb-login-err"></div>
-    <button class="sb-login-btn" onclick="doSbLogin()">Entrar</button>
-  </div>
-</div>
 
 <!-- ═══════ TELA DE LOGIN (perfil) ════════════════════════════════════════ -->
 <div id="login-overlay" class="hidden">
@@ -1566,40 +1538,24 @@ let _sbUser = null;
 const _SB_CLINIC_ID = 'clinica_drasaude';
 
 async function loadFromSupabase() {
-    const { data } = await _sb.from('agenda_data')
-        .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
-    if (data?.dados) {
-        db = data.dados;
-        localStorage.setItem(DB_KEY, JSON.stringify(db));
-    }
+    try {
+        const { data } = await _sb.from('agenda_data')
+            .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
+        if (data?.dados) {
+            db = data.dados;
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        }
+    } catch(e) { console.warn('Supabase load error:', e); }
 }
 
 function save() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
-    if (!_sbUser) return;
     _sb.from('agenda_data')
         .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' })
         .then(({ error }) => { if (error) console.warn('Supabase save error:', error); });
 }
 
-async function doSbLogin() {
-    const email = document.getElementById('sb-email').value.trim();
-    const pw    = document.getElementById('sb-pw').value;
-    const err   = document.getElementById('sb-err');
-    const btn   = document.querySelector('.sb-login-btn');
-    err.textContent = '';
-    btn.disabled = true; btn.textContent = 'Entrando...';
-    const { data, error } = await _sb.auth.signInWithPassword({ email, password: pw });
-    btn.disabled = false; btn.textContent = 'Entrar';
-    if (error) { err.textContent = 'E-mail ou senha incorretos.'; return; }
-    _sbUser = data.user;
-    await loadFromSupabase();
-    document.getElementById('sb-login-overlay').classList.add('hidden');
-    initApp();
-}
-
 async function doSbLogout() {
-    await _sb.auth.signOut();
     location.reload();
 }
 
@@ -4865,16 +4821,7 @@ function initApp() {
 }
 
 window.onload = async function() {
-    const { data: { session } } = await _sb.auth.getSession();
-    _sbUser = session?.user ?? null;
-    if (!_sbUser) {
-        // copia logo para o sb-login-overlay
-        const logoSrc = document.querySelector('header img')?.src || '';
-        if (logoSrc) document.getElementById('sb-login-logo').src = logoSrc;
-        return;
-    }
     await loadFromSupabase();
-    document.getElementById('sb-login-overlay').classList.add('hidden');
     initApp();
 };
 </script>
