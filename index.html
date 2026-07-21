@@ -1534,27 +1534,25 @@ const _sb = supabase.createClient(
     'sb_publishable_6QT2f_wCkTmpfoO_EEZlpA_BCcC8Fv8'
 );
 let _sbUser = null;
+let _dbCarregado = false;
 
 const _SB_CLINIC_ID = 'clinica_drasaude';
 
 async function loadFromSupabase() {
     try {
-        const { data } = await _sb.from('agenda_data')
+        const { data, error } = await _sb.from('agenda_data')
             .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
+        if (error) { console.warn('Supabase load error:', error); return; }
         if (data?.dados) {
             db = data.dados;
             localStorage.setItem(DB_KEY, JSON.stringify(db));
         }
-    } catch(e) { console.warn('Supabase load error:', e); }
-    _dbCarregado = true;
+        _dbCarregado = true; // só marca como carregado se não houve erro
+    } catch(e) { console.warn('Supabase load exception:', e); }
 }
-
-let _dbCarregado = false;
 
 function save() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
-    // Só envia ao Supabase depois que os dados foram carregados da nuvem
-    // Evita sobrescrever dados reais com localStorage vazio
     if (!_dbCarregado) return;
     _sb.from('agenda_data')
         .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' })
@@ -1764,6 +1762,10 @@ function switchCfgTab(e, sectionId) {
 
 async function sincronizarNuvem() {
     const btn = document.getElementById('btn-sync-nuvem');
+    if (!_dbCarregado) {
+        alert('⚠️ Aguarde o sistema terminar de carregar antes de sincronizar.');
+        return;
+    }
     btn.disabled = true; btn.textContent = '⏳ Sincronizando...';
     const { error } = await _sb.from('agenda_data')
         .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
@@ -4804,7 +4806,9 @@ function initApp() {
     const logoSrc = document.querySelector('header img')?.src || '';
     if (logoSrc) document.getElementById('sb-login-logo').src = logoSrc;
 
-    if (!db.profissionais.length) {
+    // Dados de demonstração só carregam se não há dados no Supabase (primeiro uso real)
+    // Nunca salva dados demo no Supabase para não sobrescrever dados reais
+    if (!db.profissionais.length && !_dbCarregado) {
         db.profissionais = [
             { id: 'p1', nome: 'Dr. Carlos Mendes', especialidades: ['Clínica Geral','Cardiologia'], especialidade: 'Clínica Geral', duracao: 30, horaInicio: '08:00', horaFim: '17:00', diasAtendimento: [1,2,3,4,5] },
             { id: 'p2', nome: 'Dra. Ana Paula', especialidades: ['Clínica Geral','Pediatria'], especialidade: 'Clínica Geral', duracao: 40, horaInicio: '09:00', horaFim: '18:00', diasAtendimento: [1,2,3,4,5] },
@@ -4819,7 +4823,7 @@ function initApp() {
             { id: 'ag2', pacienteId: 'pac2', profissionalId: 'p2', especialidade: 'Pediatria', data: hoje(), hora: '10:00', obs: 'Retorno', status: 'confirmado', criadoEm: new Date().toISOString() },
             { id: 'ag3', pacienteId: 'pac3', profissionalId: 'p1', especialidade: 'Clínica Geral', data: addDias(hoje(),1), hora: '08:30', obs: '', status: 'confirmado', criadoEm: new Date().toISOString() },
         ];
-        save();
+        localStorage.setItem(DB_KEY, JSON.stringify(db)); // só local, nunca Supabase
         popularFiltroProf();
         renderAgenda();
     }
