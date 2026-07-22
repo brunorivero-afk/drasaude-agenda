@@ -1537,26 +1537,67 @@ let _sbUser = null;
 let _dbCarregado = false;
 
 const _SB_CLINIC_ID = 'clinica_drasaude';
+const _PAC_CHUNK = 400; // pacientes por chunk
+
+// Remove campos vazios para reduzir tamanho do payload
+function _compactar(arr) {
+    return arr.map(obj => {
+        const r = {};
+        for (const k in obj) { if (obj[k] !== '' && obj[k] !== null && obj[k] !== undefined) r[k] = obj[k]; }
+        return r;
+    });
+}
+
+async function _sbUpsert(clinic_id, dados) {
+    const { error } = await _sb.from('agenda_data')
+        .upsert({ clinic_id, dados, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
+    if (error) console.warn('Supabase upsert error:', clinic_id, error);
+    return !error;
+}
 
 async function loadFromSupabase() {
     try {
-        const { data, error } = await _sb.from('agenda_data')
+        // Carrega dados principais (sem pacientes)
+        const { data: main, error } = await _sb.from('agenda_data')
             .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
         if (error) { console.warn('Supabase load error:', error); return; }
-        if (data?.dados) {
-            db = data.dados;
-            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        if (main?.dados) {
+            db = main.dados;
+            db.pacientes = [];
         }
-        _dbCarregado = true; // só marca como carregado se não houve erro
+
+        // Carrega chunks de pacientes
+        let i = 0;
+        while (true) {
+            const { data: chunk } = await _sb.from('agenda_data')
+                .select('dados').eq('clinic_id', `${_SB_CLINIC_ID}_pac_${i}`).maybeSingle();
+            if (!chunk?.dados?.pacientes?.length) break;
+            db.pacientes.push(...chunk.dados.pacientes);
+            i++;
+        }
+
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        _dbCarregado = true;
     } catch(e) { console.warn('Supabase load exception:', e); }
+}
+
+async function _saveToSupabase() {
+    if (!_dbCarregado) return;
+    // Salva dados principais sem pacientes
+    const mainDados = { ...db, pacientes: [] };
+    await _sbUpsert(_SB_CLINIC_ID, mainDados);
+
+    // Salva pacientes em chunks
+    const pacs = _compactar(db.pacientes || []);
+    const totalChunks = Math.ceil(pacs.length / _PAC_CHUNK) || 1;
+    for (let i = 0; i < totalChunks; i++) {
+        await _sbUpsert(`${_SB_CLINIC_ID}_pac_${i}`, { pacientes: pacs.slice(i * _PAC_CHUNK, (i+1) * _PAC_CHUNK) });
+    }
 }
 
 function save() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
-    if (!_dbCarregado) return;
-    _sb.from('agenda_data')
-        .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' })
-        .then(({ error }) => { if (error) console.warn('Supabase save error:', error); });
+    _saveToSupabase();
 }
 
 async function doSbLogout() {
@@ -1766,15 +1807,37 @@ async function sincronizarNuvem() {
         alert('⚠️ Aguarde o sistema terminar de carregar antes de sincronizar.');
         return;
     }
-    btn.disabled = true; btn.textContent = '⏳ Sincronizando...';
-    const { error } = await _sb.from('agenda_data')
-        .upsert({ clinic_id: _SB_CLINIC_ID, dados: db, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
+    btn.disabled = true;
+    const totalPac = (db.pacientes||[]).length;
+    const totalChunks = Math.ceil(totalPac / _PAC_CHUNK) || 1;
+    btn.textContent = `⏳ Enviando ${totalPac} pacientes em ${totalChunks} partes...`;
+
+    // Salva dados principais sem pacientes
+    const mainDados = { ...db, pacientes: [] };
+    const { error: e1 } = await _sb.from('agenda_data')
+        .upsert({ clinic_id: _SB_CLINIC_ID, dados: mainDados, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
+    if (e1) {
+        btn.disabled = false; btn.textContent = '☁️ Sincronizar com a nuvem agora';
+        alert('❌ Erro ao sincronizar dados principais: ' + e1.message);
+        return;
+    }
+
+    // Salva pacientes em chunks
+    const pacs = _compactar(db.pacientes || []);
+    let erroChunk = null;
+    for (let i = 0; i < totalChunks; i++) {
+        btn.textContent = `⏳ Parte ${i+1}/${totalChunks}...`;
+        const { error } = await _sb.from('agenda_data')
+            .upsert({ clinic_id: `${_SB_CLINIC_ID}_pac_${i}`, dados: { pacientes: pacs.slice(i * _PAC_CHUNK, (i+1) * _PAC_CHUNK) }, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id' });
+        if (error) { erroChunk = error; break; }
+    }
+
     btn.disabled = false; btn.textContent = '☁️ Sincronizar com a nuvem agora';
-    if (error) {
-        alert('❌ Erro ao sincronizar: ' + error.message);
+    if (erroChunk) {
+        alert('❌ Erro ao sincronizar pacientes: ' + erroChunk.message);
     } else {
-        btn.textContent = '✅ Sincronizado!';
-        setTimeout(() => { btn.textContent = '☁️ Sincronizar com a nuvem agora'; }, 3000);
+        btn.textContent = `✅ ${totalPac} pacientes sincronizados!`;
+        setTimeout(() => { btn.textContent = '☁️ Sincronizar com a nuvem agora'; }, 4000);
     }
 }
 
