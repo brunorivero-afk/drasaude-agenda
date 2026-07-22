@@ -1557,16 +1557,14 @@ async function _sbUpsert(clinic_id, dados) {
 
 async function loadFromSupabase() {
     try {
-        // Carrega dados principais
+        // db já foi carregado do localStorage antes desta função rodar
+        const localPacCount = (db.pacientes || []).length;
+
         const { data: main, error } = await _sb.from('agenda_data')
             .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
-        if (error) { console.warn('Supabase load error:', error); return; }
-        if (main?.dados) {
-            db = main.dados;
-            // db.pacientes pode já estar aqui (formato antigo) — preserva como fallback
-        }
+        if (error) { console.warn('Supabase load error:', error); _dbCarregado = true; return; }
 
-        // Tenta carregar chunks (novo formato)
+        // Tenta carregar chunks
         const chunkedPacs = [];
         let i = 0;
         while (true) {
@@ -1577,14 +1575,22 @@ async function loadFromSupabase() {
             i++;
         }
 
-        // Se chunks existem usa eles; senão mantém pacientes do formato antigo
-        if (chunkedPacs.length > 0) {
-            db.pacientes = chunkedPacs;
+        const remotePacCount = chunkedPacs.length > 0
+            ? chunkedPacs.length
+            : (main?.dados?.pacientes?.length || 0);
+
+        // Só substitui localStorage se Supabase tiver MAIS pacientes
+        if (remotePacCount > localPacCount && main?.dados) {
+            db = main.dados;
+            if (chunkedPacs.length > 0) db.pacientes = chunkedPacs;
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+            console.log(`Supabase carregou ${remotePacCount} pacientes (local tinha ${localPacCount})`);
+        } else {
+            console.log(`Mantendo localStorage: ${localPacCount} pacientes (Supabase tem ${remotePacCount})`);
         }
 
-        localStorage.setItem(DB_KEY, JSON.stringify(db));
         _dbCarregado = true;
-    } catch(e) { console.warn('Supabase load exception:', e); }
+    } catch(e) { console.warn('Supabase load exception:', e); _dbCarregado = true; }
 }
 
 async function _saveToSupabase() {
@@ -1603,7 +1609,7 @@ async function _saveToSupabase() {
 
 function save() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
-    _saveToSupabase();
+    // Supabase só via botão manual — auto-sync causava corrupção silenciosa
 }
 
 async function doSbLogout() {
