@@ -1557,23 +1557,29 @@ async function _sbUpsert(clinic_id, dados) {
 
 async function loadFromSupabase() {
     try {
-        // Carrega dados principais (sem pacientes)
+        // Carrega dados principais
         const { data: main, error } = await _sb.from('agenda_data')
             .select('dados').eq('clinic_id', _SB_CLINIC_ID).maybeSingle();
         if (error) { console.warn('Supabase load error:', error); return; }
         if (main?.dados) {
             db = main.dados;
-            db.pacientes = [];
+            // db.pacientes pode já estar aqui (formato antigo) — preserva como fallback
         }
 
-        // Carrega chunks de pacientes
+        // Tenta carregar chunks (novo formato)
+        const chunkedPacs = [];
         let i = 0;
         while (true) {
             const { data: chunk } = await _sb.from('agenda_data')
                 .select('dados').eq('clinic_id', `${_SB_CLINIC_ID}_pac_${i}`).maybeSingle();
             if (!chunk?.dados?.pacientes?.length) break;
-            db.pacientes.push(...chunk.dados.pacientes);
+            chunkedPacs.push(...chunk.dados.pacientes);
             i++;
+        }
+
+        // Se chunks existem usa eles; senão mantém pacientes do formato antigo
+        if (chunkedPacs.length > 0) {
+            db.pacientes = chunkedPacs;
         }
 
         localStorage.setItem(DB_KEY, JSON.stringify(db));
